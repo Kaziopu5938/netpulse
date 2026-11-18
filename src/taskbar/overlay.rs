@@ -24,11 +24,11 @@ use windows::Win32::UI::WindowsAndMessaging::{
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 
 use crate::platform::wide;
-use crate::settings::{Background, Config, DockMode, Position};
+use crate::settings::{Background, Config, DockMode, Layout, Position};
 use crate::state::{Shared, METER_CLASS};
 use crate::taskbar::{display, taskbar_is_vertical, taskbar_window, tray_window_of, window_rect};
 
-const PAD_X: i32 = 6;
+const PAD_X: i32 = 5;
 const PAD_Y: i32 = 2;
 const FONT_WEIGHT_SEMIBOLD: i32 = 600;
 
@@ -39,78 +39,53 @@ struct Meter {
     parent: HWND,
     config: Config,
     font: HFONT,
+    measure_font: HFONT,
     font_px: i32,
     ascent: i32,
     vertical: bool,
-    text: Vec<u16>,
+    lines: Vec<Vec<u16>>,
+    line_widths: Vec<i32>,
     width: i32,
     height: i32,
     visible: bool,
-    /// Font family, size, DPI, orientation and calibration text of the current layout.
+    /// Font family, size, DPI and orientation of the current layout.
     layout_key: String,
-    /// Advance width of the current text, used to center it.
-    text_px: i32,
 }
 
 impl Meter {
-    /// Refreshes text, font and geometry.
-    unsafe fn apply(&mut self, config: &Config, text: &str, hwnd: HWND) {
+    /// Refreshes text, font and geometry. The window is sized to the text itself,
+    /// so its right edge stays anchored next to the tray without a phantom gap.
+    unsafe fn apply(&mut self, config: &Config, lines: &[String], hwnd: HWND) {
         self.config = config.clone();
-        self.text = text.encode_utf16().collect();
         self.vertical = taskbar_is_vertical();
+
+        let mut texts: Vec<String> = match config.layout {
+            Layout::Horizontal => vec![lines.join(display::GAP)],
+            Layout::Vertical => lines.to_vec(),
+        };
+        if self.vertical {
+            texts = vec![lines.join(display::GAP)];
+        }
+        self.lines = texts.iter().map(|line| line.encode_utf16().collect()).collect();
 
         let dpi = GetDpiForWindow(hwnd).max(96) as i32;
         let key = format!(
-            "{}|{}|{}|{}|{}",
+            "{}|{}|{}|{}",
             config.font_family,
             config.font_size,
             dpi,
-            self.vertical as u8,
-            display::calibration_text(config)
+            self.vertical as u8
         );
-        if key == self.layout_key {
-            self.measure_text();
-            return;
-        }
-        self.layout_key = key;
+        if key != self.layout_key {
+            self.layout_key = key;
+            let font_px = ((config.font_size as i32) * dpi / 96).clamp(8, 64);
+            let face = wide(&config.font_family);
+            let escapement = if self.vertical { 900 } else { 0 };
 
-        let font_px = ((config.font_size as i32) * dpi / 96).clamp(8, 64);
-        let escapement = if self.vertical { 900 } else { 0 };
-        let face = wide(&config.font_family);
-
-        let font = CreateFontW(
-            -font_px,
-            0,
-            escapement,
-            0,
-            FONT_WEIGHT_SEMIBOLD,
-            0,
-            0,
-            0,
-            FONT_CHARSET(1),
-            OUT_DEFAULT_PRECIS,
-            CLIP_DEFAULT_PRECIS,
-            ANTIALIASED_QUALITY,
-            0,
-            PCWSTR(face.as_ptr()),
-        );
-        if !self.font.is_invalid() {
-            let _ = DeleteObject(self.font.into());
-        }
-        self.font = font;
-        self.font_px = font_px;
-
-        let hdc = GetDC(None);
-        let mut metrics = TEXTMETRICW::default();
-        let _ = GetTextMetricsW(hdc, &mut metrics);
-        self.ascent = metrics.tmAscent;
-
-        // Measure with an unrotated copy so the advance width is unambiguous.
-        let measure_font = if self.vertical {
-            CreateFontW(
+            let font = CreateFontW(
                 -font_px,
                 0,
-                0,
+                escapement,
                 0,
                 FONT_WEIGHT_SEMIBOLD,
                 0,
@@ -122,43 +97,77 @@ impl Meter {
                 ANTIALIASED_QUALITY,
                 0,
                 PCWSTR(face.as_ptr()),
-            )
-        } else {
-            font
-        };
-        let previous = SelectObject(hdc, measure_font.into());
-        let mut extent = SIZE::default();
-        let calibration = wide(&display::calibration_text(config));
-        let _ = GetTextExtentPoint32W(hdc, &calibration, &mut extent);
-        SelectObject(hdc, previous);
-        if self.vertical {
-            let _ = DeleteObject(measure_font.into());
-        }
-        let _ = ReleaseDC(None, hdc);
+            );
+            let measure_font = if self.vertical {
+                CreateFontW(
+                    -font_px,
+                    0,
+                    0,
+                    0,
+                    FONT_WEIGHT_SEMIBOLD,
+                    0,
+                    0,
+                    0,
+                    FONT_CHARSET(1),
+                    OUT_DEFAULT_PRECIS,
+                    CLIP_DEFAULT_PRECIS,
+                    ANTIALIASED_QUALITY,
+                    0,
+                    PCWSTR(face.as_ptr()),
+                )
+            } else {
+                HFONT(std::ptr::null_mut())
+            };
 
-        if self.vertical {
-            self.width = font_px + 4;
-            self.height = extent.cx + PAD_X * 2;
-        } else {
-            self.width = extent.cx + PAD_X * 2;
-            self.height = font_px + 4;
+            if !self.font.is_invalid() {
+                let _ = DeleteObject(self.font.into());
+            }
+            if !self.measure_font.is_invalid() {
+                let _ = DeleteObject(self.measure_font.into());
+            }
+            self.font = font;
+            self.measure_font = measure_font;
+            self.font_px = font_px;
+
+            let hdc = GetDC(None);
+            let mut metrics = TEXTMETRICW::default();
+            let _ = GetTextMetricsW(hdc, &mut metrics);
+            self.ascent = metrics.tmAscent;
+            let _ = ReleaseDC(None, hdc);
         }
-        self.measure_text();
+
+        self.measure_lines();
+        let widest = self.line_widths.iter().copied().max().unwrap_or(0);
+        if self.vertical {
+            self.width = self.font_px + 2 * PAD_Y;
+            self.height = widest + 2 * PAD_X;
+        } else {
+            self.width = widest + 2 * PAD_X;
+            let count = self.lines.len().max(1) as i32;
+            self.height = count * self.font_px + 2 * PAD_Y;
+        }
     }
 
-    /// Measures the current text with the current font so it can be centred.
-    unsafe fn measure_text(&mut self) {
-        self.text_px = 0;
-        if self.vertical || self.font.is_invalid() || self.text.is_empty() {
+    /// Measures each visible line with the current font.
+    unsafe fn measure_lines(&mut self) {
+        self.line_widths.clear();
+        if self.font.is_invalid() || self.lines.is_empty() {
             return;
         }
         let hdc = GetDC(None);
-        let previous = SelectObject(hdc, self.font.into());
-        let mut extent = SIZE::default();
-        let _ = GetTextExtentPoint32W(hdc, &self.text, &mut extent);
+        let font = if self.measure_font.is_invalid() {
+            self.font
+        } else {
+            self.measure_font
+        };
+        let previous = SelectObject(hdc, font.into());
+        for line in &self.lines {
+            let mut extent = SIZE::default();
+            let _ = GetTextExtentPoint32W(hdc, line, &mut extent);
+            self.line_widths.push(extent.cx);
+        }
         SelectObject(hdc, previous);
         let _ = ReleaseDC(None, hdc);
-        self.text_px = extent.cx;
     }
 
     unsafe fn place(&mut self) {
@@ -288,16 +297,16 @@ impl Meter {
         SetTextColor(memory, COLORREF(0x00FF_FFFF));
         let previous_font = SelectObject(memory, self.font.into());
         if self.vertical {
-            let _ = TextOutW(
-                memory,
-                PAD_X + self.ascent,
-                height - PAD_Y,
-                &self.text,
-            );
+            if let Some(first) = self.lines.first() {
+                let _ = TextOutW(memory, PAD_Y + self.ascent, height - PAD_X, first);
+            }
         } else {
-            let x = ((width - self.text_px) / 2).max(PAD_X);
-            let baseline = (height - self.font_px) / 2 + self.ascent;
-            let _ = TextOutW(memory, x, baseline, &self.text);
+            for (index, line) in self.lines.iter().enumerate() {
+                let line_width = self.line_widths.get(index).copied().unwrap_or(0);
+                let x = ((width - line_width) / 2).max(PAD_X);
+                let baseline = PAD_Y + self.ascent + index as i32 * self.font_px;
+                let _ = TextOutW(memory, x, baseline, line);
+            }
         }
         SelectObject(memory, previous_font);
 
@@ -476,22 +485,23 @@ pub unsafe fn create(shared: &Arc<Shared>) -> Option<HWND> {
     ensure_class();
     let config = shared.config.read().ok()?.clone();
     let sample = shared.sample.read().ok()?.clone();
-    let text = display::meter_text(&config, &sample);
+    let lines = display::meter_lines(&config, &sample);
 
     let state = Box::new(Meter {
         hwnd: HWND::default(),
         parent: HWND::default(),
         config: config.clone(),
         font: HFONT(std::ptr::null_mut()),
-        font_px: 12,
-        ascent: 12,
+        measure_font: HFONT(std::ptr::null_mut()),
+        font_px: 16,
+        ascent: 14,
         vertical: taskbar_is_vertical(),
-        text: Vec::new(),
+        lines: Vec::new(),
+        line_widths: Vec::new(),
         width: 140,
         height: 22,
         visible: false,
         layout_key: String::new(),
-        text_px: 0,
     });
     let state = Box::into_raw(state);
 
@@ -543,7 +553,7 @@ pub unsafe fn create(shared: &Arc<Shared>) -> Option<HWND> {
         }
     }
 
-    (*state).apply(&config, &text, hwnd);
+    (*state).apply(&config, &lines, hwnd);
     Some(hwnd)
 }
 
@@ -585,10 +595,10 @@ pub unsafe fn sync(hwnd: HWND, shared: &Shared) {
         Ok(sample) => sample.clone(),
         Err(_) => return,
     };
-    let text = display::meter_text(&config, &sample);
-    meter.apply(&config, &text, hwnd);
+    let lines = display::meter_lines(&config, &sample);
+    meter.apply(&config, &lines, hwnd);
     meter.place();
-    let visible = config.visible && !text.is_empty();
+    let visible = config.visible && !lines.is_empty();
     meter.set_visible(visible);
     if visible {
         meter.render(hwnd);

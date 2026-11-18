@@ -31,7 +31,9 @@ fn main() {
         return;
     }
 
-    let shared = state::Shared::new(settings::Config::load());
+    let config = settings::Config::load();
+    let _ = startup::sync(config.start_with_windows);
+    let shared = state::Shared::new(config);
     tray::spawn(shared.clone());
     network::spawn_sampler(shared.clone());
     taskbar::run(shared);

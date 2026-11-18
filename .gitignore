@@ -1,3 +1,7 @@
 /target
 .commandcode/
+/dist/
+installer/*.msi
+installer/*.wixobj
+installer/*.wixpdb
 *.pdb

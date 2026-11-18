@@ -1,3 +1,6 @@
 pub mod config;
 
-pub use config::{config_path, Background, Config, DockMode, Position, Theme, Unit};
+pub use config::{
+    config_path, system_uses_light_theme, Background, Config, DockMode, Layout, Position, Theme,
+    Unit,
+};

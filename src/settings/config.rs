@@ -34,6 +34,15 @@ pub enum DockMode {
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
+pub enum Layout {
+    /// `↓ 1.2 MB/s  ↑ 240 KB/s` on one line.
+    Horizontal,
+    /// Download on the first line, upload below it.
+    Vertical,
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
 pub enum Theme {
     System,
     Light,
@@ -47,6 +56,7 @@ pub struct Config {
     pub show_download: bool,
     pub show_upload: bool,
     pub unit: Unit,
+    pub layout: Layout,
     pub font_family: String,
     pub font_size: u32,
     pub text_color: String,
@@ -59,6 +69,7 @@ pub struct Config {
     pub adapter: Option<String>,
     pub dock_mode: DockMode,
     pub theme: Theme,
+    pub start_with_windows: bool,
 }
 
 impl Default for Config {
@@ -67,19 +78,21 @@ impl Default for Config {
             visible: true,
             show_download: true,
             show_upload: true,
-            unit: Unit::Bits,
+            unit: Unit::Bytes,
+            layout: Layout::Horizontal,
             font_family: "Segoe UI Semibold".to_string(),
-            font_size: 12,
+            font_size: 16,
             text_color: "#FFFFFF".to_string(),
             background: Background::Transparent,
             background_color: "#1F1F1F".to_string(),
             background_opacity: 210,
             position: Position::LeftOfTray,
-            offset: 6,
+            offset: 2,
             update_interval_ms: 1000,
             adapter: None,
             dock_mode: DockMode::Overlay,
             theme: Theme::System,
+            start_with_windows: true,
         }
     }
 }
@@ -92,7 +105,7 @@ pub fn config_path() -> PathBuf {
 }
 
 /// The taskbar follows the Windows (not app) theme on 10 and 11.
-fn taskbar_is_light() -> bool {
+pub fn system_uses_light_theme() -> bool {
     use winreg::enums::{HKEY_CURRENT_USER, KEY_READ};
     use winreg::RegKey;
     RegKey::predef(HKEY_CURRENT_USER)
@@ -117,7 +130,7 @@ impl Config {
     /// Defaults with a text colour that is readable on the current taskbar.
     fn first_run() -> Self {
         let mut config = Self::default();
-        if taskbar_is_light() {
+        if system_uses_light_theme() {
             config.text_color = "#1A1A1A".to_string();
         }
         config

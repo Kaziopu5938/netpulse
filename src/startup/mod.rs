@@ -11,11 +11,33 @@ fn command() -> String {
 }
 
 pub fn enabled() -> bool {
+    registered_command()
+        .map(|value| !value.trim().is_empty())
+        .unwrap_or(false)
+}
+
+fn registered_command() -> Option<String> {
     RegKey::predef(HKEY_CURRENT_USER)
         .open_subkey_with_flags(RUN_KEY, KEY_READ)
         .and_then(|key| key.get_value::<String, _>(VALUE_NAME))
-        .map(|value| !value.trim().is_empty())
-        .unwrap_or(false)
+        .ok()
+}
+
+/// Makes the registry match the stored preference, rewriting the entry when it
+/// points at a different copy of the executable.
+pub fn sync(desired: bool) -> io::Result<()> {
+    let registered = registered_command();
+    if desired {
+        if registered.as_deref() == Some(command().as_str()) {
+            Ok(())
+        } else {
+            set_enabled(true)
+        }
+    } else if registered.is_some() {
+        set_enabled(false)
+    } else {
+        Ok(())
+    }
 }
 
 pub fn set_enabled(on: bool) -> io::Result<()> {

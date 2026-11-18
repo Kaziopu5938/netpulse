@@ -5,8 +5,8 @@ use crate::state::Sample;
 
 pub const DOWN_ARROW: &str = "\u{2193}";
 pub const UP_ARROW: &str = "\u{2191}";
-/// Width calibration string, so the meter does not jump around as digits change.
-const CALIBRATION: &str = "888.8 Mbps";
+/// Space between the download and upload halves of a single-line meter.
+pub const GAP: &str = "  ";
 
 pub fn format_speed(bytes_per_second: f64, unit: Unit) -> String {
     let bytes = bytes_per_second.max(0.0);
@@ -47,40 +47,24 @@ fn number(value: f64) -> String {
     }
 }
 
-pub fn meter_text(config: &Config, sample: &Sample) -> String {
-    let mut parts = Vec::new();
+pub fn meter_lines(config: &Config, sample: &Sample) -> Vec<String> {
     if !sample.connected {
-        parts.push("No network".to_string());
-    } else {
-        if config.show_download {
-            parts.push(format!(
-                "{DOWN_ARROW} {}",
-                format_speed(sample.down_bps, config.unit)
-            ));
-        }
-        if config.show_upload {
-            parts.push(format!(
-                "{UP_ARROW} {}",
-                format_speed(sample.up_bps, config.unit)
-            ));
-        }
+        return vec!["No network".to_string()];
     }
-    parts.join("   ")
-}
-
-/// Same shape as [`meter_text`] but with placeholder values, used for sizing.
-pub fn calibration_text(config: &Config) -> String {
-    let mut parts = Vec::new();
+    let mut lines = Vec::new();
     if config.show_download {
-        parts.push(format!("{DOWN_ARROW} {CALIBRATION}"));
+        lines.push(format!(
+            "{DOWN_ARROW} {}",
+            format_speed(sample.down_bps, config.unit)
+        ));
     }
     if config.show_upload {
-        parts.push(format!("{UP_ARROW} {CALIBRATION}"));
+        lines.push(format!(
+            "{UP_ARROW} {}",
+            format_speed(sample.up_bps, config.unit)
+        ));
     }
-    if parts.is_empty() {
-        parts.push("No network".to_string());
-    }
-    parts.join("   ")
+    lines
 }
 
 pub fn tooltip(config: &Config, sample: &Sample) -> String {

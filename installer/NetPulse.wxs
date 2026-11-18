@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Per-user installer for NetPulse. Build from the repository root with:
+      powershell -ExecutionPolicy Bypass -File installer/build-installer.ps1
+  Requires the WiX 3 toolset (candle.exe / light.exe) and a release build.
+-->
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Product
+    Id="*"
+    Name="NetPulse"
+    Language="1033"
+    Version="1.1.0"
+    Manufacturer="NetPulse contributors"
+    UpgradeCode="7c1e2b5a-9d44-4f3b-9a1c-2e7d6f8b4a21">
+
+    <Package
+      InstallerVersion="500"
+      Compressed="yes"
+      InstallScope="perUser"
+      InstallPrivileges="limited"
+      Platform="x64"
+      Description="Live download and upload speed in the Windows taskbar" />
+
+    <MajorUpgrade
+      AllowSameVersionUpgrades="yes"
+      DowngradeErrorMessage="A newer version of NetPulse is already installed." />
+
+    <MediaTemplate EmbedCab="yes" />
+    <Property Id="ARPNOREPAIR" Value="1" />
+
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="LocalAppDataFolder">
+        <Directory Id="ProgramsFolder" Name="Programs">
+          <Directory Id="INSTALLFOLDER" Name="NetPulse">
+            <Component Id="NetPulseBinary" Guid="3b8f1d62-5c4a-4e09-8b77-1a2d9c6e5f30">
+              <RegistryValue
+                Root="HKCU"
+                Key="Software\NetPulse"
+                Name="InstallDir"
+                Type="string"
+                Value="[INSTALLFOLDER]"
+                KeyPath="yes" />
+              <File
+                Id="NetPulseExe"
+                Source="..\target\release\netpulse.exe">
+                <Shortcut
+                  Id="SettingsShortcut"
+                  Directory="NetPulseMenuFolder"
+                  Name="NetPulse Settings"
+                  Description="Download and upload speed in the taskbar"
+                  Arguments="--settings"
+                  WorkingDirectory="INSTALLFOLDER" />
+              </File>
+              <RemoveFolder Id="RemoveNetPulseDir" On="uninstall" />
+              <RemoveFolder Id="RemoveProgramsDir" Directory="ProgramsFolder" On="uninstall" />
+              <RemoveFolder Id="RemoveMenuDir" Directory="NetPulseMenuFolder" On="uninstall" />
+            </Component>
+            <Component Id="NetPulseAutostart" Guid="9a4c7e15-2f68-4b3d-9c51-8e7a6d2b4f09">
+              <RegistryValue
+                Id="AutostartValue"
+                Root="HKCU"
+                Key="Software\Microsoft\Windows\CurrentVersion\Run"
+                Name="NetPulse"
+                Type="string"
+                Value="&quot;[INSTALLFOLDER]netpulse.exe&quot;"
+                KeyPath="yes" />
+            </Component>
+          </Directory>
+        </Directory>
+      </Directory>
+      <Directory Id="ProgramMenuFolder">
+        <Directory Id="NetPulseMenuFolder" Name="NetPulse" />
+      </Directory>
+    </Directory>
+
+    <Feature Id="MainFeature" Title="NetPulse" Level="1">
+      <ComponentRef Id="NetPulseBinary" />
+      <ComponentRef Id="NetPulseAutostart" />
+    </Feature>
+
+    <UIRef Id="WixUI_Minimal" />
+  </Product>
+</Wix>

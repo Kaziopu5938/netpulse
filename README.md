@@ -12,6 +12,7 @@
   <img alt="Rust" src="https://img.shields.io/badge/Rust-stable-DEA584?style=flat-square&logo=rust&logoColor=white">
   <img alt="Memory" src="https://img.shields.io/badge/RAM-~11%20MB-34D399?style=flat-square">
   <img alt="Size" src="https://img.shields.io/badge/binary-4.9%20MiB-64748B?style=flat-square">
+  <a href="https://github.com/Kaziopu5938/netpulse/releases/latest"><img alt="Download" src="https://img.shields.io/badge/download-1.1.0-39C4F0?style=flat-square"></a>
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-blue?style=flat-square"></a>
 </p>
 
@@ -30,13 +31,15 @@ background process.
 
 | | |
 | --- | --- |
-| **Live readout** | `↓ 12.5 Mbps ↑ 2.4 Mbps` — refresh every 250 ms to 5 s, 1 s by default |
+| **Live readout** | `↓ 3.84 MB/s ↑ 645 KB/s` — refresh every 250 ms to 5 s, 1 s by default |
+| **Two layouts** | One line by default, or download and upload stacked on two lines |
 | **Ethernet & Wi-Fi** | PPP and mobile broadband too; only physical interfaces are counted |
 | **Adapter selection** | Automatic active-adapter detection, or pin one interface in Settings |
 | **Honest idle/disconnect** | `0` when idle, `No network` when the link drops, counters that reset never go negative |
-| **Compact & themeable** | Download only, upload only or both; Kbps/Mbps or KB/s/MB/s; font, size, colour, rounded background with real per-pixel opacity, tray side and gap |
+| **Compact & themeable** | Bytes by default (KB/s, MB/s) or bits (Kbps, Mbps); 16 px Segoe UI Semibold by default; colour, rounded background with real per-pixel opacity, tray side and gap |
+| **Starts with Windows** | On by default; toggle it in Settings or from the tray |
 | **Tray icon** | Tooltip with live speeds, Open Settings, Show/Hide, Network Information, Start with Windows, Check for Updates, Exit |
-| **Settings window** | egui/eframe, system/light/dark theme, everything applied live and saved as JSON |
+| **Settings window** | egui/eframe with a live taskbar preview, light/dark/system theme, everything applied live and saved as JSON |
 | **Multi-DPI & auto-hide aware** | Follows taskbar edge, thickness, DPI and auto-hide on a 1 s tick; rotated text on vertical taskbars |
 | **Small** | ~11 MB working set, one 1 Hz sampler thread, 4.9 MiB self-contained executable |
 
@@ -65,8 +68,12 @@ Neither mode injects code into Explorer, and neither pretends to be a system tas
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/settings.png" alt="NetPulse settings window"><br><sub><b>Settings</b> — egui window, applied live</sub></td>
+    <td width="50%"><img src="docs/images/settings.png" alt="NetPulse settings window"><br><sub><b>Settings</b> — rail navigation and a live taskbar preview</sub></td>
     <td width="50%"><img src="docs/images/tray-menu.png" alt="NetPulse tray menu"><br><sub><b>Tray menu</b> — operations without opening Settings</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/images/taskbar.png" alt="NetPulse one-line layout in the taskbar"><br><sub><b>One line</b> (default) — sits directly beside the hidden-icons chevron</sub></td>
+    <td width="50%"><img src="docs/images/taskbar-vertical.png" alt="NetPulse stacked layout in the taskbar"><br><sub><b>Two lines</b> — download above upload, centred in the taskbar</sub></td>
   </tr>
   <tr>
     <td colspan="2" align="center"><img src="docs/images/network-info.png" alt="NetPulse network information dialog" width="520"><br><sub><b>Network Information</b> — current adapter, sample speed and detected interfaces</sub></td>
@@ -75,7 +82,19 @@ Neither mode injects code into Explorer, and neither pretends to be a system tas
 
 ## Install
 
-### Build from source (recommended today)
+### Download (recommended)
+
+Grab the latest build from [Releases](https://github.com/Kaziopu5938/netpulse/releases/latest):
+
+| File | What it does |
+| --- | --- |
+| `NetPulse-1.1.0.msi` | Per-user install (no admin prompt) into `%LOCALAPPDATA%\Programs\NetPulse`, with a Start Menu shortcut and the autostart entry. Uninstall from Windows Settings → Apps. |
+| `netpulse.exe` | Portable build. Run it from anywhere; *Settings → System* can add it to startup. |
+
+The binaries carry no code-signing certificate yet, so SmartScreen may ask once before the first
+run. Verify the download against the SHA-256 checksums attached to the release.
+
+### Build from source
 
 Requirements: Windows 10/11 x64, [Rust stable](https://rustup.rs) and either the MSVC toolchain
 (Visual Studio Build Tools) or a MinGW-w64 toolchain for the `x86_64-pc-windows-gnu` target.
@@ -90,22 +109,23 @@ cargo build --release
 `target\release\netpulse.exe` is standalone (no runtime DLLs with the MSVC or self-contained GNU
 linker). Copy it anywhere and run it.
 
-### Installer
+### Build the installer
 
-`installer/netpulse.iss` is an [Inno Setup 6](https://jrsoftware.org/isinfo.php) script:
+`installer/NetPulse.wxs` is a WiX 3 definition, built by `installer/build-installer.ps1`:
 
 ```powershell
-cargo build --release
-iscc installer\netpulse.iss
-# installer\NetPulse-1.0.0-setup.exe
+# one-time: download wix314-binaries.zip from https://github.com/wixtoolset/wix3/releases
+powershell -ExecutionPolicy Bypass -File installer\build-installer.ps1 -WixBin C:\path\to\wix\bin
+# installer\NetPulse-1.1.0.msi
 ```
 
-It installs per user (no admin prompt), optionally adds the autostart entry via
-`netpulse.exe --enable-startup`, and removes the Run value plus `%APPDATA%\NetPulse` on uninstall.
+It installs per user, adds the Start Menu shortcut and the HKCU autostart value, and removes both
+on uninstall.
 
 ### Autostart
 
-Enable *Start with Windows* in Settings or from the tray menu. Under the hood it writes one value:
+NetPulse starts with Windows by default. *Settings → System* and the tray menu toggle it; the
+preference is stored in the config file and mirrored to one registry value at launch:
 
 ```
 HKCU\Software\Microsoft\Windows\CurrentVersion\Run\NetPulse = "C:\path\to\netpulse.exe"
@@ -120,7 +140,7 @@ The tray menu:
 - **Open Settings** — launches `netpulse.exe --settings` (a second, short-lived process).
 - **Show Speed Meter** — toggle the taskbar meter without touching the config file.
 - **Network Information** — active adapter, current sample and the detected physical interfaces.
-- **Start with Windows** — toggles the Run entry, checkmark reflects the registry.
+- **Start with Windows** — toggles the Run entry; the checkmark follows the saved preference.
 - **Check for Updates** — reports the running version (no update feed is configured in this build).
 - **Exit** — stops the process and removes the tray icon.
 
@@ -143,19 +163,21 @@ immediately when Settings saves, so edits take effect without restarting.
   "visible": true,
   "show_download": true,
   "show_upload": true,
-  "unit": "bits",
+  "unit": "bytes",
+  "layout": "horizontal",
   "font_family": "Segoe UI Semibold",
-  "font_size": 12,
+  "font_size": 16,
   "text_color": "#FFFFFF",
   "background": "transparent",
   "background_color": "#1F1F1F",
   "background_opacity": 210,
   "position": "left_of_tray",
-  "offset": 6,
+  "offset": 2,
   "update_interval_ms": 1000,
   "adapter": null,
   "dock_mode": "overlay",
-  "theme": "system"
+  "theme": "system",
+  "start_with_windows": true
 }
 ```
 
@@ -163,8 +185,9 @@ immediately when Settings saves, so edits take effect without restarting.
 | --- | --- | --- |
 | `visible` | `true` / `false` | Show the meter (tray toggle writes this). |
 | `show_download`, `show_upload` | `true` / `false` | Which halves to draw. Both off hides the meter. |
-| `unit` | `bits` / `bytes` | Kbps/Mbps or KB/s/MB/s, scaled automatically. |
-| `font_family`, `font_size` | face name, 8–24 px | Taskbar text. |
+| `unit` | `bytes` / `bits` | KB/s, MB/s (default) or Kbps, Mbps, scaled automatically. |
+| `layout` | `horizontal` / `vertical` | One line, or download above upload on two lines. |
+| `font_family`, `font_size` | face name, 8–24 px | Taskbar text; defaults to Segoe UI Semibold at 16 px. |
 | `text_color` | `#RRGGBB` | Text colour; first run follows the light/dark taskbar theme. |
 | `background` | `transparent` / `solid` | Rounded pill behind the text or fully transparent. |
 | `background_color`, `background_opacity` | `#RRGGBB`, 0–255 | Pill colour and real alpha. |
@@ -173,6 +196,7 @@ immediately when Settings saves, so edits take effect without restarting.
 | `adapter` | GUID string or `null` | Pin one interface; `null` sums all active physical ones. |
 | `dock_mode` | `overlay` / `taskbar` | See [Taskbar integration](#taskbar-integration--the-honest-version). |
 | `theme` | `system` / `light` / `dark` | Settings window theme (the meter has its own colours). |
+| `start_with_windows` | `true` / `false` | Mirrored to the HKCU Run entry when NetPulse starts. |
 
 ## Architecture
 
@@ -194,12 +218,12 @@ flowchart TD
 | `src/network/monitor.rs` | Per-interface counter deltas → bytes/s; reset/disconnect handling. |
 | `src/network/mod.rs` | Sampler thread: sleep, sample, publish, wake the UI. |
 | `src/taskbar/mod.rs` | Hidden host window, message routing, `TaskbarCreated`, taskbar geometry. |
-| `src/taskbar/overlay.rs` | Layered meter window, GDI mask → premultiplied DIB, placement and docking. |
-| `src/taskbar/display.rs` | Speed formatting, meter text, colour parsing. |
+| `src/taskbar/overlay.rs` | Layered meter window sized to its text, one- or two-line rendering, placement and docking. |
+| `src/taskbar/display.rs` | Speed formatting, meter lines, colour parsing. |
 | `src/tray/mod.rs` | Tray icon, menu, tooltip, registry autostart toggle. |
-| `src/ui/window.rs` | egui settings window (own process), live save/reload notifications. |
-| `src/startup/mod.rs` | HKCU Run entry read/write/remove. |
-| `installer/netpulse.iss` | Per-user Inno Setup installer. |
+| `src/ui/window.rs` | egui settings process: rail navigation, live taskbar preview, Segoe UI typography. |
+| `src/startup/mod.rs` | HKCU Run entry read/write/remove and startup sync. |
+| `installer/NetPulse.wxs` | WiX 3 per-user MSI definition (built by `build-installer.ps1`). |
 
 **Why Settings is a separate process.** The background app is a plain Win32 message loop that costs
 a few MB. Loading eframe/OpenGL permanently just for an occasional dialog would multiply that, so
@@ -212,14 +236,16 @@ Measured on Windows 11 Pro 24H2 (build 26100), 1366×768 @ 100%:
 
 | Metric | Value |
 | --- | --- |
-| Working set, idle | ~11 MB |
+| Working set, idle | ~11 MB (10.9 MB measured) |
 | CPU, idle (1 s sampling) | ~0.03 s per 5 s (< 1% of one core) |
-| Release executable | 4.9 MiB, no runtime DLLs |
+| Release executable | 4.92 MiB, no runtime DLLs |
+| Installer | 2.7 MB MSI, per-user |
 | Network traffic | none — counters are local |
 | Background GPU usage | none (no eframe/OpenGL in the background process) |
 
-The meter repaints once per sample into a ~250×20 DIB and pushes it with `UpdateLayeredWindow`; the
-tray thread wakes twice a second to refresh its tooltip. Nothing busy-loops.
+The meter repaints once per sample into a small DIB sized to the text and pushes it with
+`UpdateLayeredWindow`; the tray thread wakes twice a second to refresh its tooltip. Nothing
+busy-loops.
 
 `cargo test` covers speed formatting and adapter filtering.
 
@@ -237,7 +263,8 @@ tray thread wakes twice a second to refresh its tooltip. Nothing busy-loops.
 - **Primary taskbar only.** The meter follows `Shell_TrayWnd`; secondary-display taskbars
   (`Shell_SecondaryTrayWnd`) are not used.
 - **Vertical taskbars** rotate the text 90° (supported on Windows 10; Windows 11 no longer ships
-  vertical taskbars).
+  vertical taskbars). The two-line layout is meant for horizontal taskbars; on a vertical taskbar
+  NetPulse falls back to a single rotated line so nothing is clipped.
 - **Text transparency** is not configurable — the text is always opaque; the background opacity is
   real per-pixel alpha.
 - **Check for Updates** only reports the running version; no release feed is configured.

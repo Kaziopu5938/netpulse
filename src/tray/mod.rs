@@ -12,7 +12,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
 use crate::network::adapter;
 use crate::platform::{exe_path, info};
 use crate::startup;
-use crate::state::{Shared, WM_EXIT, WM_TOGGLE_VISIBLE};
+use crate::state::{Shared, WM_CONFIG_CHANGED, WM_EXIT, WM_TOGGLE_VISIBLE};
 use crate::taskbar::display;
 
 const ID_SETTINGS: &str = "open-settings";
@@ -74,8 +74,6 @@ fn run(shared: Arc<Shared>) {
 
     let mut last_tooltip = String::new();
     let mut message = MSG::default();
-    let mut startup_state = startup::enabled();
-    let mut last_startup_check = std::time::Instant::now();
 
     loop {
         if shared.exit.load(Ordering::Relaxed) {
@@ -105,16 +103,25 @@ fn run(shared: Arc<Shared>) {
                 }
                 ID_NETWORK => show_network_info(&shared),
                 ID_STARTUP => {
-                    let wanted = !startup_state;
+                    let mut config = shared
+                        .config
+                        .read()
+                        .map(|config| config.clone())
+                        .unwrap_or_default();
+                    let wanted = !config.start_with_windows;
                     if let Err(error) = startup::set_enabled(wanted) {
                         info(
                             "NetPulse",
                             &format!("Could not change the startup entry: {error}"),
                         );
                     }
-                    startup_state = startup::enabled();
-                    last_startup_check = std::time::Instant::now();
-                    startup_item.set_checked(startup_state);
+                    config.start_with_windows = startup::enabled();
+                    if let Ok(mut slot) = shared.config.write() {
+                        *slot = config.clone();
+                    }
+                    let _ = config.save();
+                    startup_item.set_checked(config.start_with_windows);
+                    post_host(WM_CONFIG_CHANGED);
                 }
                 ID_UPDATES => {
                     info(
@@ -140,11 +147,7 @@ fn run(shared: Arc<Shared>) {
             Err(_) => break,
         };
         toggle.set_checked(config.visible);
-        if last_startup_check.elapsed() > std::time::Duration::from_secs(5) {
-            startup_state = startup::enabled();
-            last_startup_check = std::time::Instant::now();
-        }
-        startup_item.set_checked(startup_state);
+        startup_item.set_checked(config.start_with_windows);
 
         let tooltip = display::tooltip(&config, &sample);
         if tooltip != last_tooltip {
