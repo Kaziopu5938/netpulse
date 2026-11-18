@@ -2,8 +2,6 @@
   <img src="docs/hero.svg" alt="NetPulse — live download and upload speed in the Windows taskbar" width="100%">
 </p>
 
-<h1 align="center">NetPulse</h1>
-
 <p align="center">
   <b>Live download and upload speed in your Windows 10 / 11 taskbar.</b><br>
   Native Win32 and Rust — no Electron, no background service, no traffic of its own.
@@ -179,16 +177,12 @@ immediately when Settings saves, so edits take effect without restarting.
 ## Architecture
 
 ```mermaid
-flowchart LR
-    subgraph P["netpulse.exe — background (single instance)"]
-        direction TB
-        S["sampler thread<br/>GetIfTable2 every interval"] -->|sample| H["host window thread<br/>message loop + 1 s timer"]
-        H -->|render| M["meter window<br/>layered · per-pixel alpha"]
-        T["tray thread<br/>tray-icon + menu"] -->|actions| H
-    end
-    F[("%APPDATA%\NetPulse\config.json")] <-->|read / atomic save| H
-    U["netpulse.exe --settings<br/>egui/eframe process"] -->|save + notify| F
-    U -->|WM_APP_CONFIG_CHANGED| H
+flowchart TD
+    sampler["sampler thread<br/>GetIfTable2 every interval"] -->|sample| host["host window<br/>message loop + 1 s timer"]
+    tray["tray thread<br/>tray-icon + menu"] -->|actions| host
+    host -->|render| meter["meter window<br/>layered, per-pixel alpha"]
+    settings["netpulse.exe --settings<br/>egui, separate process"] -->|save + notify| config[("%APPDATA%/NetPulse/config.json")]
+    config -->|load| host
 ```
 
 | Path | Responsibility |
