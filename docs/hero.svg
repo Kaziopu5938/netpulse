@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="340" viewBox="0 0 1280 340" role="img" aria-label="NetPulse — live download and upload speed in the Windows taskbar">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#080D17"/>
+      <stop offset="0.55" stop-color="#0C1524"/>
+      <stop offset="1" stop-color="#101E33"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#38BDF8" stop-opacity="0.22"/>
+      <stop offset="1" stop-color="#38BDF8" stop-opacity="0"/>
+    </radialGradient>
+    <pattern id="grid" width="34" height="34" patternUnits="userSpaceOnUse">
+      <path d="M 34 0 L 0 0 0 34" fill="none" stroke="#1B2A42" stroke-width="1"/>
+    </pattern>
+  </defs>
+
+  <rect width="1280" height="340" fill="url(#bg)"/>
+  <rect width="1280" height="340" fill="url(#grid)" opacity="0.45"/>
+  <ellipse cx="1030" cy="150" rx="330" ry="190" fill="url(#glow)"/>
+
+  <!-- wordmark -->
+  <text x="64" y="132" font-family="Segoe UI, Segoe UI Variable Display, Inter, Helvetica Neue, Arial, sans-serif" font-size="72" font-weight="700" letter-spacing="-2" fill="#F8FAFC">Net<tspan fill="#38BDF8">Pulse</tspan></text>
+
+  <text x="66" y="182" font-family="Segoe UI, Segoe UI Variable Text, Inter, Helvetica Neue, Arial, sans-serif" font-size="23" fill="#94A3B8">Live download and upload speed</text>
+  <text x="66" y="214" font-family="Segoe UI, Segoe UI Variable Text, Inter, Helvetica Neue, Arial, sans-serif" font-size="23" fill="#94A3B8">in your Windows taskbar.</text>
+
+  <!-- chips -->
+  <g font-family="Segoe UI, Inter, Helvetica Neue, Arial, sans-serif" font-size="15" fill="#CBD5E1">
+    <rect x="64" y="252" width="142" height="34" rx="17" fill="#0F1B2D" stroke="#223349"/>
+    <text x="78" y="274">Windows 10 / 11</text>
+
+    <rect x="216" y="252" width="118" height="34" rx="17" fill="#0F1B2D" stroke="#223349"/>
+    <text x="230" y="274">Rust · Win32</text>
+
+    <rect x="344" y="252" width="126" height="34" rx="17" fill="#0F1B2D" stroke="#223349"/>
+    <text x="358" y="274">~11 MB RAM</text>
+
+    <rect x="480" y="252" width="62" height="34" rx="17" fill="#0F1B2D" stroke="#223349"/>
+    <text x="494" y="274">MIT</text>
+  </g>
+
+  <!-- taskbar mock -->
+  <g>
+    <rect x="640" y="118" width="580" height="66" rx="14" fill="#0B1220" stroke="#1E2A3F"/>
+    <rect x="640" y="118" width="580" height="66" rx="14" fill="#101C2E" opacity="0.55"/>
+
+    <rect x="665" y="137" width="28" height="28" rx="8" fill="#1B2739"/>
+    <rect x="701" y="137" width="28" height="28" rx="8" fill="#1B2739"/>
+    <rect x="737" y="137" width="28" height="28" rx="8" fill="#1B2739"/>
+    <rect x="773" y="137" width="28" height="28" rx="8" fill="#1B2739"/>
+
+    <text x="815" y="158" font-family="Segoe UI, Segoe UI Variable Text, Inter, Helvetica Neue, Arial, sans-serif" font-size="21" font-weight="600" fill="#F8FAFC">↓ 12.5 Mbps</text>
+    <text x="945" y="158" font-family="Segoe UI, Segoe UI Variable Text, Inter, Helvetica Neue, Arial, sans-serif" font-size="21" font-weight="600" fill="#E2E8F0">↑ 2.4 Mbps</text>
+
+    <!-- tray -->
+    <g stroke="#94A3B8" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="1022,149 1030,157 1038,149"/>
+      <path d="M 1052 155 A 15 15 0 0 1 1076 155"/>
+      <path d="M 1057 160 A 9 9 0 0 1 1071 160"/>
+    </g>
+    <circle cx="1064" cy="165" r="2.2" fill="#94A3B8"/>
+    <path d="M 1090 152 L 1096 152 L 1102 146 L 1102 166 L 1096 160 L 1090 160 Z" fill="#94A3B8"/>
+    <path d="M 1107 151 A 9 9 0 0 1 1107 161" fill="none" stroke="#94A3B8" stroke-width="2.2" stroke-linecap="round"/>
+    <rect x="1122" y="148" width="27" height="15" rx="4" fill="none" stroke="#94A3B8" stroke-width="2"/>
+    <rect x="1125" y="151" width="15" height="9" rx="1.5" fill="#34D399"/>
+    <rect x="1151" y="152" width="3" height="7" rx="1.2" fill="#94A3B8"/>
+    <text x="1168" y="160" font-family="Segoe UI, Inter, Helvetica Neue, Arial, sans-serif" font-size="15" fill="#CBD5E1">5:20</text>
+  </g>
+
+  <text x="642" y="214" font-family="Segoe UI, Inter, Helvetica Neue, Arial, sans-serif" font-size="14" fill="#64748B">click-through · per-pixel alpha · follows taskbar edge, DPI and auto-hide</text>
+</svg>
