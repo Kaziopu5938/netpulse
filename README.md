@@ -12,7 +12,7 @@
   <img alt="Rust" src="https://img.shields.io/badge/Rust-stable-DEA584?style=flat-square&logo=rust&logoColor=white">
   <img alt="Memory" src="https://img.shields.io/badge/RAM-~11%20MB-34D399?style=flat-square">
   <img alt="Size" src="https://img.shields.io/badge/binary-4.9%20MiB-64748B?style=flat-square">
-  <a href="https://github.com/Kaziopu5938/netpulse/releases/latest"><img alt="Download" src="https://img.shields.io/badge/download-1.1.0-39C4F0?style=flat-square"></a>
+  <a href="https://github.com/Kaziopu5938/netpulse/releases/latest"><img alt="Download" src="https://img.shields.io/badge/download-1.1.1-39C4F0?style=flat-square"></a>
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-blue?style=flat-square"></a>
 </p>
 
@@ -82,19 +82,24 @@ Neither mode injects code into Explorer, and neither pretends to be a system tas
 
 ## Install
 
-### Download (recommended)
+### Option 1 — Download the installer (recommended)
 
-Grab the latest build from [Releases](https://github.com/Kaziopu5938/netpulse/releases/latest):
+No toolchain, no build step. Grab the latest build from
+[**Releases**](https://github.com/Kaziopu5938/netpulse/releases/latest):
 
-| File | What it does |
-| --- | --- |
-| `NetPulse-1.1.0.msi` | Per-user install (no admin prompt) into `%LOCALAPPDATA%\Programs\NetPulse`, with a Start Menu shortcut and the autostart entry. Uninstall from Windows Settings → Apps. |
-| `netpulse.exe` | Portable build. Run it from anywhere; *Settings → System* can add it to startup. |
+1. **Download `NetPulse-1.1.1.msi`** and double-click it.
+   - Installs per user into `%LOCALAPPDATA%\Programs\NetPulse` — **no admin prompt**.
+   - Adds a Start Menu shortcut (`NetPulse Settings`) and registers the autostart entry.
+   - Starts immediately after install; uninstall from *Windows Settings → Apps*.
+2. **Prefer no installer at all?** Download `NetPulse-1.1.1.exe` — a portable, single-file build.
+   Run it from anywhere (pin it, put it on a USB stick); *Settings → System* can add it to startup.
 
+Verify your download against the SHA-256 checksums attached to the release (`SHA256SUMS.txt`).
 The binaries carry no code-signing certificate yet, so SmartScreen may ask once before the first
-run. Verify the download against the SHA-256 checksums attached to the release.
+run — choose *More info → Run anyway*.
 
-### Build from source
+<details>
+<summary><b>Option 2 — Build from source</b> (only if you want to hack on it)</summary>
 
 Requirements: Windows 10/11 x64, [Rust stable](https://rustup.rs) and either the MSVC toolchain
 (Visual Studio Build Tools) or a MinGW-w64 toolchain for the `x86_64-pc-windows-gnu` target.
@@ -109,18 +114,16 @@ cargo build --release
 `target\release\netpulse.exe` is standalone (no runtime DLLs with the MSVC or self-contained GNU
 linker). Copy it anywhere and run it.
 
-### Build the installer
-
-`installer/NetPulse.wxs` is a WiX 3 definition, built by `installer/build-installer.ps1`:
+Building the MSI yourself: `installer/NetPulse.wxs` is a WiX 3 definition, built by
+`installer/build-installer.ps1`:
 
 ```powershell
 # one-time: download wix314-binaries.zip from https://github.com/wixtoolset/wix3/releases
 powershell -ExecutionPolicy Bypass -File installer\build-installer.ps1 -WixBin C:\path\to\wix\bin
-# installer\NetPulse-1.1.0.msi
+# installer\NetPulse-1.1.1.msi
 ```
 
-It installs per user, adds the Start Menu shortcut and the HKCU autostart value, and removes both
-on uninstall.
+</details>
 
 ### Autostart
 
