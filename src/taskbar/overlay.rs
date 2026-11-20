@@ -16,7 +16,8 @@ use windows::Win32::UI::HiDpi::GetDpiForWindow;
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, GetParent, GetWindowLongPtrW, IsWindow, RegisterClassW,
     SetParent, SetWindowLongPtrW, SetWindowPos, ShowWindow, UpdateLayeredWindow, CREATESTRUCTW,
-    GWLP_USERDATA, GWL_STYLE, SWP_NOACTIVATE, SW_HIDE, SW_SHOWNA, ULW_ALPHA, WINDOW_EX_STYLE,
+    GWLP_USERDATA, GWL_STYLE, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOOWNERZORDER, SWP_NOSIZE, SW_HIDE,
+    SW_SHOWNA, ULW_ALPHA, WINDOW_EX_STYLE,
     WM_ERASEBKGND, WM_NCCREATE, WM_NCDESTROY, WM_PAINT, WNDCLASSW, WS_CHILD, WS_CLIPSIBLINGS,
     WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_EX_TRANSPARENT, WS_POPUP,
     HWND_TOPMOST, HWND_TOP,
@@ -603,6 +604,39 @@ pub unsafe fn sync(hwnd: HWND, shared: &Shared) {
     if visible {
         meter.render(hwnd);
     }
+}
+
+/// Keeps the overlay meter above the taskbar without moving or resizing it.
+///
+/// `Shell_TrayWnd` is itself a topmost window. Clicking the taskbar makes Explorer
+/// raise it above other topmost windows, which pushes the click-through meter
+/// behind the taskbar until the next full sync (up to a second later) — the
+/// meter visibly disappears and comes back. Re-asserting `HWND_TOPMOST` on a
+/// short watchdog timer keeps it in place with no perceptible flicker. This is
+/// a no-op when Explorer has not moved the taskbar or when the meter is hidden.
+pub unsafe fn keep_topmost(hwnd: HWND, shared: &Shared) {
+    if hwnd.is_invalid() || !IsWindow(Some(hwnd)).as_bool() {
+        return;
+    }
+    let config = match shared.config.read() {
+        Ok(config) => config,
+        Err(_) => return,
+    };
+    if config.dock_mode != DockMode::Overlay || !config.visible {
+        return;
+    }
+    if GetWindowLongPtrW(hwnd, GWLP_USERDATA) == 0 {
+        return;
+    }
+    let _ = SetWindowPos(
+        hwnd,
+        Some(HWND_TOPMOST),
+        0,
+        0,
+        0,
+        0,
+        SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOOWNERZORDER,
+    );
 }
 
 /// Coverage of a rounded rectangle at a pixel centre (0.0 ..= 1.0).

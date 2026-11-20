@@ -23,6 +23,10 @@ use crate::state::{
 };
 
 const TIMER_ID: usize = 1;
+/// Fast watchdog: the taskbar can raise itself above the overlay meter when it
+/// is clicked, so the meter's topmost z-order is re-asserted frequently.
+const ZORDER_TIMER_ID: usize = 2;
+const ZORDER_TIMER_MS: u32 = 150;
 
 pub fn taskbar_window() -> Option<HWND> {
     let class = wide("Shell_TrayWnd");
@@ -117,11 +121,16 @@ unsafe extern "system" fn host_proc(
         WM_CREATE => {
             host.ensure_meter();
             SetTimer(Some(hwnd), TIMER_ID, 1000, None);
+            SetTimer(Some(hwnd), ZORDER_TIMER_ID, ZORDER_TIMER_MS, None);
             LRESULT(0)
         }
         WM_TIMER => {
             host.ensure_meter();
-            overlay::sync(host.meter, &host.shared);
+            if wparam.0 == ZORDER_TIMER_ID {
+                overlay::keep_topmost(host.meter, &host.shared);
+            } else {
+                overlay::sync(host.meter, &host.shared);
+            }
             LRESULT(0)
         }
         WM_SPEED_UPDATED => {
