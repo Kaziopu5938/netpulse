@@ -12,9 +12,12 @@ use windows::Win32::UI::WindowsAndMessaging::PostMessageW;
 use crate::state::{Shared, WM_SPEED_UPDATED};
 
 pub fn spawn_sampler(shared: Arc<Shared>) {
-    let _ = std::thread::Builder::new()
+    if let Err(error) = std::thread::Builder::new()
         .name("netpulse-sampler".into())
-        .spawn(move || run(shared));
+        .spawn(move || run(shared))
+    {
+        eprintln!("netpulse: could not start the sampler thread: {error}");
+    }
 }
 
 fn run(shared: Arc<Shared>) {
@@ -48,12 +51,7 @@ fn run(shared: Arc<Shared>) {
 fn post(target: isize, msg: u32) {
     if target != 0 {
         unsafe {
-            let _ = PostMessageW(
-                Some(HWND(target as *mut c_void)),
-                msg,
-                WPARAM(0),
-                LPARAM(0),
-            );
+            let _ = PostMessageW(Some(HWND(target as *mut c_void)), msg, WPARAM(0), LPARAM(0));
         }
     }
 }

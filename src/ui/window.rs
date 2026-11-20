@@ -1,12 +1,16 @@
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use eframe::egui::{
-    self, Align, Align2, Color32, CornerRadius, FontData, FontDefinitions, FontFamily, FontId, Frame,
-    Layout as EguiLayout, Margin, Rect, RichText, Sense, Stroke, TextStyle, Vec2,
+    self, Align, Align2, Color32, CornerRadius, FontData, FontDefinitions, FontFamily, FontId,
+    Frame, Layout as EguiLayout, Margin, Rect, RichText, Sense, Stroke, TextStyle, Vec2,
 };
 use windows::core::PCWSTR;
-use windows::Win32::UI::WindowsAndMessaging::{FindWindowW, SetForegroundWindow, ShowWindow, SW_RESTORE};
+use windows::Win32::System::SystemInformation::GetWindowsDirectoryW;
+use windows::Win32::UI::WindowsAndMessaging::{
+    FindWindowW, SetForegroundWindow, ShowWindow, SW_RESTORE,
+};
 
 use crate::network::adapter;
 use crate::platform::{self, wide};
@@ -52,6 +56,20 @@ fn window_icon() -> egui::IconData {
         width: size,
         height: size,
     }
+}
+
+/// Resolves Explorer by absolute path. Launching a bare `explorer` from a
+/// user-writable / portable directory would let a local `explorer.exe` be
+/// picked up instead of the system one.
+fn explorer_path() -> Option<PathBuf> {
+    let mut buffer = [0u16; 260];
+    let length = unsafe { GetWindowsDirectoryW(Some(&mut buffer)) } as usize;
+    if length == 0 || length >= buffer.len() {
+        return None;
+    }
+    let directory = String::from_utf16_lossy(&buffer[..length]);
+    let path = PathBuf::from(directory).join("explorer.exe");
+    path.is_file().then_some(path)
 }
 
 fn focus_existing() -> bool {
@@ -156,8 +174,14 @@ fn apply_style(context: &egui::Context, dark: bool) {
     style.text_styles = [
         (TextStyle::Heading, display_font(19.0)),
         (TextStyle::Body, FontId::new(13.5, FontFamily::Proportional)),
-        (TextStyle::Button, FontId::new(13.5, FontFamily::Proportional)),
-        (TextStyle::Small, FontId::new(11.5, FontFamily::Proportional)),
+        (
+            TextStyle::Button,
+            FontId::new(13.5, FontFamily::Proportional),
+        ),
+        (
+            TextStyle::Small,
+            FontId::new(11.5, FontFamily::Proportional),
+        ),
         (TextStyle::Monospace, FontId::monospace(12.0)),
     ]
     .into();
@@ -278,7 +302,7 @@ struct SettingsApp {
     adapters: Vec<adapter::Adapter>,
     status: String,
     status_ok: bool,
-    last_save: Instant,
+    last_save: Option<Instant>,
     section: Section,
     applied_dark: Option<bool>,
     applied_fonts: bool,
@@ -292,7 +316,7 @@ impl SettingsApp {
             status_ok: true,
             draft: config.clone(),
             saved: config,
-            last_save: Instant::now(),
+            last_save: None,
             section: Section::Display,
             applied_dark: None,
             applied_fonts: false,
@@ -319,8 +343,30 @@ impl SettingsApp {
         }
     }
 
+    /// The background process can write two fields independently of this
+    /// window (tray visibility toggle and Start-with-Windows toggle). Merge
+    /// those changes before saving so an edit here cannot silently undo them.
+    fn merge_external_changes(&mut self) {
+        let disk = Config::load();
+        if disk == self.saved {
+            return;
+        }
+        if self.draft.visible == self.saved.visible {
+            self.draft.visible = disk.visible;
+        }
+        if self.draft.start_with_windows == self.saved.start_with_windows {
+            self.draft.start_with_windows = disk.start_with_windows;
+        }
+        self.saved = disk;
+    }
+
     fn flush(&mut self, context: &egui::Context) {
-        if self.draft == self.saved || self.last_save.elapsed() < Duration::from_millis(250) {
+        self.merge_external_changes();
+        if self.draft == self.saved
+            || self
+                .last_save
+                .is_some_and(|at| at.elapsed() < Duration::from_millis(250))
+        {
             return;
         }
         match self.draft.save() {
@@ -335,12 +381,16 @@ impl SettingsApp {
                 self.status_ok = false;
             }
         }
-        self.last_save = Instant::now();
+        self.last_save = Some(Instant::now());
         context.request_repaint();
     }
 
     fn reload_if_changed(&mut self) {
-        if self.draft != self.saved || self.last_save.elapsed() < Duration::from_millis(1000) {
+        if self.draft != self.saved
+            || self
+                .last_save
+                .is_some_and(|at| at.elapsed() < Duration::from_millis(1000))
+        {
             return;
         }
         let disk = Config::load();
@@ -423,7 +473,8 @@ impl SettingsApp {
 
         let width = ui.available_width();
         let (rule, _) = ui.allocate_exact_size(Vec2::new(width, 1.0), Sense::hover());
-        ui.painter().rect_filled(rule, CornerRadius::ZERO, p.hairline);
+        ui.painter()
+            .rect_filled(rule, CornerRadius::ZERO, p.hairline);
         ui.add_space(14.0);
 
         egui::ScrollArea::vertical()
@@ -515,17 +566,10 @@ impl SettingsApp {
 
         if self.draft.background == Background::Solid {
             let bg = parse_color(&self.draft.background_color);
-            let fill = Color32::from_rgba_unmultiplied(
-                bg[0],
-                bg[1],
-                bg[2],
-                self.draft.background_opacity,
-            );
+            let fill =
+                Color32::from_rgba_unmultiplied(bg[0], bg[1], bg[2], self.draft.background_opacity);
             let pill = Rect::from_min_size(
-                egui::pos2(
-                    right - widest - 12.0,
-                    centre.y - block_height / 2.0 - 7.0,
-                ),
+                egui::pos2(right - widest - 12.0, centre.y - block_height / 2.0 - 7.0),
                 Vec2::new(widest + 24.0, block_height + 14.0),
             );
             painter.rect_filled(pill, CornerRadius::same(9), fill);
@@ -628,8 +672,7 @@ impl SettingsApp {
                     self.draft.background_color = format_color(rgb);
                 }
                 ui.add(
-                    egui::Slider::new(&mut self.draft.background_opacity, 0..=255)
-                        .text("opacity"),
+                    egui::Slider::new(&mut self.draft.background_opacity, 0..=255).text("opacity"),
                 );
             }
         });
@@ -667,9 +710,17 @@ impl SettingsApp {
                             "{} — {} ({})",
                             entry.name,
                             entry.kind,
-                            if entry.up { "connected" } else { "disconnected" }
+                            if entry.up {
+                                "connected"
+                            } else {
+                                "disconnected"
+                            }
                         );
-                        ui.selectable_value(&mut self.draft.adapter, Some(entry.guid.clone()), label);
+                        ui.selectable_value(
+                            &mut self.draft.adapter,
+                            Some(entry.guid.clone()),
+                            label,
+                        );
                     }
                 });
             if ui.button("Scan").clicked() {
@@ -727,11 +778,11 @@ impl SettingsApp {
             if ui.button("Reset to defaults").clicked() {
                 self.draft = Config::default();
                 let _ = startup::set_enabled(self.draft.start_with_windows);
-                self.last_save = Instant::now() - Duration::from_secs(1);
+                self.last_save = None;
             }
             if ui.button("Open settings folder").clicked() {
-                if let Some(folder) = config_path().parent() {
-                    let _ = std::process::Command::new("explorer").arg(folder).spawn();
+                if let (Some(explorer), Some(folder)) = (explorer_path(), config_path().parent()) {
+                    let _ = std::process::Command::new(explorer).arg(folder).spawn();
                 }
             }
         });
@@ -777,12 +828,7 @@ fn nav_item(ui: &mut egui::Ui, label: &str, selected: bool, p: &Palette) -> egui
     response
 }
 
-fn row<R>(
-    ui: &mut egui::Ui,
-    label: &str,
-    p: &Palette,
-    add: impl FnOnce(&mut egui::Ui) -> R,
-) -> R {
+fn row<R>(ui: &mut egui::Ui, label: &str, p: &Palette, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
     let result = ui
         .horizontal(|ui| {
             ui.allocate_ui_with_layout(

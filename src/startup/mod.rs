@@ -1,6 +1,6 @@
 use std::io;
 
-use winreg::enums::{HKEY_CURRENT_USER, KEY_READ, KEY_SET_VALUE, DELETE};
+use winreg::enums::{DELETE, HKEY_CURRENT_USER, KEY_READ, KEY_SET_VALUE};
 use winreg::RegKey;
 
 const RUN_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Run";
@@ -10,9 +10,11 @@ fn command() -> String {
     format!("\"{}\"", crate::platform::exe_path().display())
 }
 
+/// Reports enabled only when the Run entry actually points at this executable.
+/// A stale or hijacked value must not be mistaken for our own autostart entry.
 pub fn enabled() -> bool {
     registered_command()
-        .map(|value| !value.trim().is_empty())
+        .map(|value| value.trim().eq_ignore_ascii_case(&command()))
         .unwrap_or(false)
 }
 

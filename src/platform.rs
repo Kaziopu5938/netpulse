@@ -1,10 +1,13 @@
 use std::path::PathBuf;
 use windows::core::PCWSTR;
-use windows::Win32::Foundation::{GetLastError, HWND, LPARAM, WPARAM, ERROR_ALREADY_EXISTS};
+use windows::Win32::Foundation::{GetLastError, ERROR_ALREADY_EXISTS, HWND, LPARAM, WPARAM};
+use windows::Win32::System::LibraryLoader::{
+    SetDefaultDllDirectories, LOAD_LIBRARY_SEARCH_DEFAULT_DIRS, LOAD_LIBRARY_SEARCH_SYSTEM32,
+};
 use windows::Win32::System::Threading::CreateMutexW;
 use windows::Win32::UI::WindowsAndMessaging::{
-    FindWindowW, MessageBoxW, PostMessageW, MB_ICONERROR, MB_ICONINFORMATION, MB_OK,
-    MB_SETFOREGROUND, MESSAGEBOX_STYLE,
+    FindWindowW, MessageBoxW, PostMessageW, SetForegroundWindow, ShowWindow, MB_ICONERROR,
+    MB_ICONINFORMATION, MB_OK, MB_SETFOREGROUND, MESSAGEBOX_STYLE, SW_RESTORE,
 };
 
 pub fn wide(s: &str) -> Vec<u16> {
@@ -57,13 +60,34 @@ pub fn ensure_single_instance(name: &str) -> bool {
         match CreateMutexW(None, true, PCWSTR(name.as_ptr())) {
             Ok(handle) => {
                 let is_first = GetLastError() != ERROR_ALREADY_EXISTS;
-                // The mutex stays open for the process lifetime; the handle value
-                // itself does not need to be closed explicitly.
+                if !is_first {
+                    // A second launch should surface the running instance
+                    // instead of exiting silently with no explanation.
+                    if let Some(hwnd) = host_window() {
+                        let _ = ShowWindow(hwnd, SW_RESTORE);
+                        let _ = SetForegroundWindow(hwnd);
+                    }
+                }
+                // Keep the handle alive for the process lifetime; Windows
+                // closes it when the process exits.
                 let _ = handle;
                 is_first
             }
-            Err(_) => true,
+            // Fail closed: if the mutex cannot be created, assume another
+            // instance is running rather than starting a second one.
+            Err(_) => false,
         }
+    }
+}
+
+/// Removes the current working directory from the DLL search order. The app
+/// can be installed in (or run from) a user-writable folder, so a bare DLL name
+/// must never resolve against whatever directory the process started in.
+pub fn harden_dll_search() {
+    unsafe {
+        let _ = SetDefaultDllDirectories(
+            LOAD_LIBRARY_SEARCH_DEFAULT_DIRS | LOAD_LIBRARY_SEARCH_SYSTEM32,
+        );
     }
 }
 

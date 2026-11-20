@@ -12,7 +12,7 @@
   <img alt="Rust" src="https://img.shields.io/badge/Rust-stable-DEA584?style=flat-square&logo=rust&logoColor=white">
   <img alt="Memory" src="https://img.shields.io/badge/RAM-~11%20MB-34D399?style=flat-square">
   <img alt="Size" src="https://img.shields.io/badge/binary-4.9%20MiB-64748B?style=flat-square">
-  <a href="https://github.com/Kaziopu5938/netpulse/releases/latest"><img alt="Download" src="https://img.shields.io/badge/download-1.1.2-39C4F0?style=flat-square"></a>
+  <a href="https://github.com/Kaziopu5938/netpulse/releases/latest"><img alt="Download" src="https://img.shields.io/badge/download-1.1.3-39C4F0?style=flat-square"></a>
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-blue?style=flat-square"></a>
 </p>
 
@@ -90,11 +90,11 @@ clicking the taskbar never pushes the meter out of sight.
 No toolchain, no build step. Grab the latest build from
 [**Releases**](https://github.com/Kaziopu5938/netpulse/releases/latest):
 
-1. **Download `NetPulse-1.1.2.msi`** and double-click it.
+1. **Download `NetPulse-1.1.3.msi`** and double-click it.
    - Installs per user into `%LOCALAPPDATA%\Programs\NetPulse` — **no admin prompt**.
    - Adds a Start Menu shortcut (`NetPulse Settings`) and registers the autostart entry.
    - Starts immediately after install; uninstall from *Windows Settings → Apps*.
-2. **Prefer no installer at all?** Download `NetPulse-1.1.2.exe` — a portable, single-file build.
+2. **Prefer no installer at all?** Download `NetPulse-1.1.3.exe` — a portable, single-file build.
    Run it from anywhere (pin it, put it on a USB stick); *Settings → System* can add it to startup.
 
 Verify your download against the SHA-256 checksums attached to the release (`SHA256SUMS.txt`).
@@ -123,7 +123,7 @@ Building the MSI yourself: `installer/NetPulse.wxs` is a WiX 3 definition, built
 ```powershell
 # one-time: download wix314-binaries.zip from https://github.com/wixtoolset/wix3/releases
 powershell -ExecutionPolicy Bypass -File installer\build-installer.ps1 -WixBin C:\path\to\wix\bin
-# installer\NetPulse-1.1.2.msi
+# installer\NetPulse-1.1.3.msi
 ```
 
 </details>

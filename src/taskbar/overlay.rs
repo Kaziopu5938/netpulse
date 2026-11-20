@@ -7,22 +7,21 @@ use windows::Win32::Graphics::Gdi::{
     BeginPaint, CreateCompatibleDC, CreateDIBSection, CreateFontW, CreateSolidBrush, DeleteDC,
     DeleteObject, EndPaint, FillRect, GetDC, GetMonitorInfoW, GetTextExtentPoint32W,
     GetTextMetricsW, MapWindowPoints, MonitorFromWindow, ReleaseDC, SelectObject, SetBkMode,
-    SetTextAlign, SetTextColor, TextOutW, AC_SRC_ALPHA, AC_SRC_OVER, BITMAPINFO, BITMAPINFOHEADER,
-    BI_RGB, BLENDFUNCTION, CLIP_DEFAULT_PRECIS, DIB_RGB_COLORS, FONT_CHARSET, HFONT, MONITORINFO,
-    MONITOR_DEFAULTTONEAREST, OUT_DEFAULT_PRECIS, ANTIALIASED_QUALITY, TA_BASELINE, TA_LEFT,
-    TEXTMETRICW, TRANSPARENT,
+    SetTextAlign, SetTextColor, TextOutW, AC_SRC_ALPHA, AC_SRC_OVER, ANTIALIASED_QUALITY,
+    BITMAPINFO, BITMAPINFOHEADER, BI_RGB, BLENDFUNCTION, CLIP_DEFAULT_PRECIS, DIB_RGB_COLORS,
+    FONT_CHARSET, HFONT, MONITORINFO, MONITOR_DEFAULTTONEAREST, OUT_DEFAULT_PRECIS, TA_BASELINE,
+    TA_LEFT, TEXTMETRICW, TRANSPARENT,
 };
+use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::UI::HiDpi::GetDpiForWindow;
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, GetParent, GetWindowLongPtrW, IsWindow, RegisterClassW,
     SetParent, SetWindowLongPtrW, SetWindowPos, ShowWindow, UpdateLayeredWindow, CREATESTRUCTW,
-    GWLP_USERDATA, GWL_STYLE, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOOWNERZORDER, SWP_NOSIZE, SW_HIDE,
-    SW_SHOWNA, ULW_ALPHA, WINDOW_EX_STYLE,
-    WM_ERASEBKGND, WM_NCCREATE, WM_NCDESTROY, WM_PAINT, WNDCLASSW, WS_CHILD, WS_CLIPSIBLINGS,
-    WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_EX_TRANSPARENT, WS_POPUP,
-    HWND_TOPMOST, HWND_TOP,
+    GWLP_USERDATA, GWL_STYLE, HWND_TOP, HWND_TOPMOST, SWP_NOACTIVATE, SWP_NOMOVE,
+    SWP_NOOWNERZORDER, SWP_NOSIZE, SW_HIDE, SW_SHOWNA, ULW_ALPHA, WINDOW_EX_STYLE, WM_ERASEBKGND,
+    WM_NCCREATE, WM_NCDESTROY, WM_PAINT, WNDCLASSW, WS_CHILD, WS_CLIPSIBLINGS, WS_EX_LAYERED,
+    WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_EX_TRANSPARENT, WS_POPUP,
 };
-use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 
 use crate::platform::wide;
 use crate::settings::{Background, Config, DockMode, Layout, Position};
@@ -53,6 +52,21 @@ struct Meter {
     layout_key: String,
 }
 
+impl Drop for Meter {
+    fn drop(&mut self) {
+        // GDI fonts are process-wide handles; every meter recreation (Explorer
+        // restart, dock-mode change, exit) would otherwise leak two of them.
+        unsafe {
+            if !self.font.is_invalid() {
+                let _ = DeleteObject(self.font.into());
+            }
+            if !self.measure_font.is_invalid() {
+                let _ = DeleteObject(self.measure_font.into());
+            }
+        }
+    }
+}
+
 impl Meter {
     /// Refreshes text, font and geometry. The window is sized to the text itself,
     /// so its right edge stays anchored next to the tray without a phantom gap.
@@ -67,19 +81,20 @@ impl Meter {
         if self.vertical {
             texts = vec![lines.join(display::GAP)];
         }
-        self.lines = texts.iter().map(|line| line.encode_utf16().collect()).collect();
+        self.lines = texts
+            .iter()
+            .map(|line| line.encode_utf16().collect())
+            .collect();
 
         let dpi = GetDpiForWindow(hwnd).max(96) as i32;
         let key = format!(
             "{}|{}|{}|{}",
-            config.font_family,
-            config.font_size,
-            dpi,
-            self.vertical as u8
+            config.font_family, config.font_size, dpi, self.vertical as u8
         );
         if key != self.layout_key {
             self.layout_key = key;
-            let font_px = ((config.font_size as i32) * dpi / 96).clamp(8, 64);
+            let font_px =
+                ((config.font_size.clamp(8, 24) as i32).saturating_mul(dpi) / 96).clamp(8, 64);
             let face = wide(&config.font_family);
             let escapement = if self.vertical { 900 } else { 0 };
 
@@ -132,7 +147,11 @@ impl Meter {
 
             let hdc = GetDC(None);
             let mut metrics = TEXTMETRICW::default();
+            // Measure with the configured font selected; the screen DC's
+            // default metrics would misplace the baseline for custom fonts.
+            let previous_font = SelectObject(hdc, self.font.into());
             let _ = GetTextMetricsW(hdc, &mut metrics);
+            SelectObject(hdc, previous_font);
             self.ascent = metrics.tmAscent;
             let _ = ReleaseDC(None, hdc);
         }
@@ -216,8 +235,13 @@ impl Meter {
                 y: screen_y,
             };
             let mut points = [point];
-            MapWindowPoints(None, Some(self.parent), &mut points);
-            (points[0].x, points[0].y)
+            if MapWindowPoints(None, Some(self.parent), &mut points) == 0 {
+                // Cross-process mapping can fail; keep the screen coordinates
+                // rather than passing an untransformed point as child coords.
+                (screen_x, screen_y)
+            } else {
+                (points[0].x, points[0].y)
+            }
         };
 
         let insert_after = if self.parent.is_invalid() {
@@ -251,8 +275,10 @@ impl Meter {
     /// Draws the meter into a 32-bit DIB and pushes it to the layered window with
     /// per-pixel alpha (no colour-key fringing, real background opacity).
     unsafe fn render(&mut self, hwnd: HWND) {
-        let width = self.width.max(1);
-        let height = self.height.max(1);
+        // Bound the allocation: width/height are derived from measured text,
+        // but unsafe buffer arithmetic must never trust unbounded values.
+        let width = self.width.clamp(1, 4096);
+        let height = self.height.clamp(1, 4096);
         let screen = GetDC(None);
         let memory = CreateCompatibleDC(Some(screen));
 
@@ -265,14 +291,8 @@ impl Meter {
         info.bmiHeader.biCompression = BI_RGB.0;
 
         let mut bits: *mut c_void = std::ptr::null_mut();
-        let bitmap = match CreateDIBSection(
-            Some(memory),
-            &info,
-            DIB_RGB_COLORS,
-            &mut bits,
-            None,
-            0,
-        ) {
+        let bitmap = match CreateDIBSection(Some(memory), &info, DIB_RGB_COLORS, &mut bits, None, 0)
+        {
             Ok(bitmap) if !bits.is_null() => bitmap,
             _ => {
                 let _ = DeleteDC(memory);
@@ -312,11 +332,7 @@ impl Meter {
         SelectObject(memory, previous_font);
 
         let text = display::colorref(&self.config.text_color);
-        let (text_r, text_g, text_b) = (
-            text.0 & 0xFF,
-            (text.0 >> 8) & 0xFF,
-            (text.0 >> 16) & 0xFF,
-        );
+        let (text_r, text_g, text_b) = (text.0 & 0xFF, (text.0 >> 8) & 0xFF, (text.0 >> 16) & 0xFF);
         let background = display::colorref(&self.config.background_color);
         let (bg_r, bg_g, bg_b) = (
             background.0 & 0xFF,
@@ -329,15 +345,23 @@ impl Meter {
             0
         };
 
-        let count = (width * height) as usize;
-        let pixels = std::slice::from_raw_parts_mut(bits as *mut u8, count * 4);
+        let count = (width as usize)
+            .checked_mul(height as usize)
+            .and_then(|n| n.checked_mul(4))
+            .unwrap_or(0);
+        if count == 0 {
+            SelectObject(memory, previous);
+            let _ = DeleteObject(bitmap.into());
+            let _ = DeleteDC(memory);
+            let _ = ReleaseDC(None, screen);
+            return;
+        }
+        let pixels = std::slice::from_raw_parts_mut(bits as *mut u8, count);
         let radius = 6.0f64.min(height as f64 / 2.0);
         for y in 0..height {
             for x in 0..width {
                 let index = ((y * width + x) * 4) as usize;
-                let mask = pixels[index]
-                    .max(pixels[index + 1])
-                    .max(pixels[index + 2]) as u32;
+                let mask = pixels[index].max(pixels[index + 1]).max(pixels[index + 2]) as u32;
                 let coverage = if self.config.background == Background::Solid {
                     rounded_coverage(x as f64, y as f64, width as f64, height as f64, radius)
                 } else {
@@ -429,6 +453,9 @@ unsafe extern "system" fn meter_proc(
 ) -> LRESULT {
     match msg {
         WM_NCCREATE => {
+            if lparam.0 == 0 {
+                return LRESULT(0);
+            }
             let create = &*(lparam.0 as *const CREATESTRUCTW);
             let meter = create.lpCreateParams as *mut Meter;
             if meter.is_null() {

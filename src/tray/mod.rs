@@ -23,9 +23,12 @@ const ID_UPDATES: &str = "check-updates";
 const ID_EXIT: &str = "exit";
 
 pub fn spawn(shared: Arc<Shared>) {
-    let _ = std::thread::Builder::new()
+    if let Err(error) = std::thread::Builder::new()
         .name("netpulse-tray".into())
-        .spawn(move || run(shared));
+        .spawn(move || run(shared))
+    {
+        eprintln!("netpulse: could not start the tray thread: {error}");
+    }
 }
 
 fn run(shared: Arc<Shared>) {
@@ -187,7 +190,11 @@ fn show_network_info(shared: &Shared) {
         text.push_str(&format!(
             "{} — {}\n    {}\n",
             entry.name,
-            if entry.up { "connected" } else { "disconnected" },
+            if entry.up {
+                "connected"
+            } else {
+                "disconnected"
+            },
             entry.description
         ));
     }
@@ -210,17 +217,12 @@ fn show_network_info(shared: &Shared) {
     };
 
     text.push_str(&format!(
-        "\nSelected: {selected}\nActive: {active}\n\n{down}   {up}\n",
-        down = format!(
-            "{} {}",
-            display::DOWN_ARROW,
-            display::format_speed(sample.down_bps, config.unit)
-        ),
-        up = format!(
-            "{} {}",
-            display::UP_ARROW,
-            display::format_speed(sample.up_bps, config.unit)
-        ),
+        "\nSelected: {selected}\nActive: {active}\n\n\
+         {down_arrow} {down}   {up_arrow} {up}\n",
+        down_arrow = display::DOWN_ARROW,
+        up_arrow = display::UP_ARROW,
+        down = display::format_speed(sample.down_bps, config.unit),
+        up = display::format_speed(sample.up_bps, config.unit),
     ));
     info("Network Information", &text);
 }

@@ -12,7 +12,10 @@ struct Prev {
 
 /// Turns the monotonically increasing interface byte counters into bytes/second.
 pub struct Monitor {
-    prev: HashMap<u32, Prev>,
+    /// Keyed by interface GUID, not `InterfaceIndex`: Windows reuses indices
+    /// when adapters are removed and replugged, which would compare a fresh
+    /// adapter's counters against a different adapter's previous values.
+    prev: HashMap<String, Prev>,
 }
 
 impl Monitor {
@@ -51,8 +54,8 @@ impl Monitor {
                     names.push(name);
                 }
 
-                let key = row.InterfaceIndex;
-                seen.insert(key);
+                let key = adapter::guid_string(&row.InterfaceGuid);
+                seen.insert(key.clone());
                 let previous = self.prev.insert(
                     key,
                     Prev {

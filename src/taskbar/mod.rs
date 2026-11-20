@@ -35,15 +35,7 @@ pub fn taskbar_window() -> Option<HWND> {
 
 pub fn tray_window_of(taskbar: HWND) -> Option<HWND> {
     let class = wide("TrayNotifyWnd");
-    unsafe {
-        FindWindowExW(
-            Some(taskbar),
-            None,
-            PCWSTR(class.as_ptr()),
-            PCWSTR::null(),
-        )
-    }
-    .ok()
+    unsafe { FindWindowExW(Some(taskbar), None, PCWSTR(class.as_ptr()), PCWSTR::null()) }.ok()
 }
 
 pub fn window_rect(hwnd: HWND) -> Option<RECT> {
@@ -97,6 +89,9 @@ unsafe extern "system" fn host_proc(
     lparam: LPARAM,
 ) -> LRESULT {
     if msg == WM_NCCREATE {
+        if lparam.0 == 0 {
+            return LRESULT(0);
+        }
         let create = &*(lparam.0 as *const CREATESTRUCTW);
         let host = create.lpCreateParams as *mut Host;
         if host.is_null() {
@@ -104,7 +99,10 @@ unsafe extern "system" fn host_proc(
         }
         SetWindowLongPtrW(hwnd, GWLP_USERDATA, host as isize);
         let host_ref = &*host;
-        host_ref.shared.host.store(hwnd.0 as isize, Ordering::Relaxed);
+        host_ref
+            .shared
+            .host
+            .store(hwnd.0 as isize, Ordering::Relaxed);
         return LRESULT(1);
     }
 
@@ -177,7 +175,8 @@ unsafe extern "system" fn host_proc(
                 SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
                 drop(Box::from_raw(pointer));
             }
-            PostQuitMessage(0);
+            // WM_DESTROY already posted WM_QUIT; posting it here would queue a
+            // second one on every shutdown.
             DefWindowProcW(hwnd, msg, wparam, lparam)
         }
         _ => DefWindowProcW(hwnd, msg, wparam, lparam),

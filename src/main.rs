@@ -11,6 +11,8 @@ mod tray;
 mod ui;
 
 fn main() {
+    // Must run before any dynamically loaded dependency can resolve a DLL.
+    platform::harden_dll_search();
     platform::enable_dpi_awareness();
 
     let arguments: Vec<String> = std::env::args().skip(1).collect();
@@ -27,7 +29,9 @@ fn main() {
         return;
     }
 
-    if !platform::ensure_single_instance("Local\\NetPulseInstance") {
+    if !platform::ensure_single_instance(
+        "Local\\NetPulseInstance-8C2F4A19-6D5B-4E0A-9F31-2B7D5A8E4C60",
+    ) {
         return;
     }
 

@@ -4,6 +4,39 @@ All notable changes to NetPulse are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.3] - 2026-11-20
+
+### Security
+
+- Launch Explorer by its absolute path from the Windows directory instead of a
+  bare `explorer` name, preventing a local executable from being picked up from
+  a user-writable install/portable directory.
+- Remove the working directory from the DLL search order at startup.
+- Fail closed when the single-instance mutex cannot be created, and bring the
+  running instance to the foreground on a duplicate launch.
+- Validate and bound every field loaded from the user-editable JSON config
+  (lengths, ranges and file size) before it reaches Win32 APIs or unsafe code.
+- The corrupt-config path no longer re-enables the autostart entry; the
+  existing registry state is preserved. The autostart check now verifies the
+  Run entry actually points at this executable.
+- Pin dependency versions and add Dependabot, CI, CodeQL code scanning, a
+  security policy and branch protection so unreviewed or failing changes cannot
+  be pushed to `main`.
+
+### Fixed
+
+- Free both GDI font handles when the meter window is destroyed, instead of
+  leaking them on every Explorer restart or dock-mode change.
+- Measure text ascent with the configured font selected into the device
+  context, fixing vertical misalignment/clipping with custom fonts.
+- Bound and use checked arithmetic for the DIB buffer size and font scaling.
+- Key sampler history by interface GUID instead of the reusable interface
+  index, avoiding false speed spikes after an adapter is replugged.
+- Avoid a startup panic from subtracting from `Instant` in the settings window.
+- Check cross-process `MapWindowPoints` and stop posting `WM_QUIT` twice.
+- Report thread-spawn failures instead of silently running without a tray icon
+  or sampler.
+
 ## [1.1.2] - 2026-11-20
 
 ### Fixed
